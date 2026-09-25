@@ -2,9 +2,7 @@
 
 const fs = require("fs-extra");
 const path = require("path");
-const os = require("os");
 const https = require("https");
-const { utils } = global;
 
 module.exports = {
 	config: {
@@ -13,33 +11,27 @@ module.exports = {
 		author: "SHTOT",
 		countDown: 5,
 		role: 0,
-		description: "Change bot prefix and show prefix as an image",
+		description: "Show bot prefix as image and change prefix",
 		category: "config",
 		guide: {
 			en:
-				"{pn} : show current prefix as image"
-				+ "\n{pn} <new prefix>: change prefix in this group"
+				"{pn} : show prefix image"
+				+ "\n{pn} <new prefix> : change prefix"
 				+ "\nExample: {pn} #"
-				+ "\n\n{pn} <new prefix> -g: change global bot prefix"
+				+ "\n\n{pn} <new prefix> -g : change global prefix"
 				+ "\nExample: {pn} # -g"
-				+ "\n\n{pn} reset: reset group prefix"
+				+ "\n\n{pn} reset : reset group prefix"
 		}
 	},
 
 	langs: {
 		en: {
-			reset: "✅ Prefix has been reset to default: %1",
-			onlyAdmin: "❌ Only bot admin can change the global prefix.",
-			confirmGlobal:
-				"⚠️ React to this message to confirm changing the global prefix.",
-			confirmThisThread:
-				"⚠️ React to this message to confirm changing the prefix in this group.",
-			successGlobal:
-				"✅ Global prefix changed to: %1",
-			successThisThread:
-				"✅ Group prefix changed to: %1",
-			imageError:
-				"❌ An error occurred while creating the prefix image."
+			reset: "✅ Prefix reset to default: %1",
+			onlyAdmin: "❌ Only bot admin can change global prefix.",
+			confirmGlobal: "⚠️ React to confirm changing global prefix.",
+			confirmThisThread: "⚠️ React to confirm changing group prefix.",
+			successGlobal: "✅ Global prefix changed to: %1",
+			successThisThread: "✅ Group prefix changed to: %1"
 		}
 	},
 
@@ -52,11 +44,18 @@ module.exports = {
 		threadsData,
 		getLang
 	}) {
-		if (!args[0])
-			return message.SyntaxError();
 
-		// Reset prefix
+		// إذا كتب prefix بوحدها
+		if (!args[0]) {
+
+			return message.reply({
+				attachment: await downloadImage()
+			});
+		}
+
+		// Reset
 		if (args[0].toLowerCase() === "reset") {
+
 			await threadsData.set(
 				event.threadID,
 				null,
@@ -77,16 +76,17 @@ module.exports = {
 			commandName,
 			author: event.senderID,
 			newPrefix,
-			messageID: null,
 			setGlobal: false
 		};
 
 		// Global prefix
 		if (args[1] === "-g") {
-			if (role < 2)
+
+			if (role < 2) {
 				return message.reply(
 					getLang("onlyAdmin")
 				);
+			}
 
 			formSet.setGlobal = true;
 		}
@@ -96,6 +96,7 @@ module.exports = {
 				? getLang("confirmGlobal")
 				: getLang("confirmThisThread"),
 			(err, info) => {
+
 				if (err || !info)
 					return;
 
@@ -116,6 +117,7 @@ module.exports = {
 		Reaction,
 		getLang
 	}) {
+
 		const {
 			author,
 			newPrefix,
@@ -125,9 +127,11 @@ module.exports = {
 		if (event.userID !== author)
 			return;
 
-		// Change global prefix
+		// Global
 		if (setGlobal) {
-			global.GoatBot.config.prefix = newPrefix;
+
+			global.GoatBot.config.prefix =
+				newPrefix;
 
 			fs.writeFileSync(
 				global.client.dirConfig,
@@ -146,7 +150,7 @@ module.exports = {
 			);
 		}
 
-		// Change group prefix
+		// Group
 		await threadsData.set(
 			event.threadID,
 			newPrefix,
@@ -166,306 +170,104 @@ module.exports = {
 		message
 	}) {
 
-		/*
-			=========================================
-			SHTOT PREFIX IMAGE SYSTEM
-			=========================================
-		*/
-
+		// كلمة prefix بوحدها
 		if (
 			!event.body ||
 			event.body.trim().toLowerCase() !== "prefix"
 		)
 			return;
 
-		try {
-
-			// ========================================
-			// رابط صورة SHTOT
-			// ========================================
-
-			const IMAGE_URL =
-				"https://i.postimg.cc/0jBmM6wd/file-000000006e2481f5a55795b75561339e.png";
-
-
-			// ========================================
-			// Prefix الحالي ديال المجموعة
-			// ========================================
-
-			const currentPrefix =
-				String(
-					utils.getPrefix(event.threadID)
-				);
-
-
-			// ========================================
-			// تحميل مكتبة Sharp
-			// ========================================
-
-			let sharp;
-
-			try {
-				sharp = require("sharp");
-			}
-			catch (err) {
-
-				return message.reply(
-					"❌ مكتبة sharp ناقصة.\n\n" +
-					"ثبتها بهاد الأمر:\n" +
-					"npm install sharp"
-				);
-			}
-
-
-			// ========================================
-			// المجلد المؤقت
-			// ========================================
-
-			const tempDir = path.join(
-				os.tmpdir(),
-				"shtot-prefix"
-			);
-
-			await fs.ensureDir(tempDir);
-
-
-			// ========================================
-			// أسماء الملفات
-			// ========================================
-
-			const templatePath = path.join(
-				tempDir,
-				"shtot_prefix_template.png"
-			);
-
-			const outputPath = path.join(
-				tempDir,
-				`shtot_prefix_${event.threadID}_${Date.now()}.png`
-			);
-
-
-			// ========================================
-			// تحميل الصورة الأصلية
-			// ========================================
-
-			if (!fs.existsSync(templatePath)) {
-
-				await new Promise((resolve, reject) => {
-
-					const file = fs.createWriteStream(
-						templatePath
-					);
-
-					https.get(
-						IMAGE_URL,
-						response => {
-
-							if (
-								response.statusCode >= 300 &&
-								response.statusCode < 400 &&
-								response.headers.location
-							) {
-
-								file.close();
-								fs.unlinkSync(templatePath);
-
-								return reject(
-									new Error(
-										"Image redirected"
-									)
-								);
-							}
-
-							if (
-								response.statusCode !== 200
-							) {
-
-								file.close();
-								fs.unlinkSync(templatePath);
-
-								return reject(
-									new Error(
-										"Failed to download image: " +
-										response.statusCode
-									)
-								);
-							}
-
-							response.pipe(file);
-
-							file.on(
-								"finish",
-								() => {
-									file.close(resolve);
-								}
-							);
-
-						}
-					).on(
-						"error",
-						err => {
-
-							file.close();
-
-							if (
-								fs.existsSync(
-									templatePath
-								)
-							) {
-								fs.unlinkSync(
-									templatePath
-								);
-							}
-
-							reject(err);
-						}
-					);
-
-				});
-			}
-
-
-			// ========================================
-			// حماية النص من XML
-			// ========================================
-
-			const safePrefix =
-				currentPrefix
-					.replace(/&/g, "&amp;")
-					.replace(/</g, "&lt;")
-					.replace(/>/g, "&gt;")
-					.replace(/"/g, "&quot;")
-					.replace(/'/g, "&apos;");
-
-
-			// ========================================
-			// SVG ديال Prefix
-			// ========================================
-
-			const svg = `
-			<svg
-				width="1536"
-				height="1024"
-				xmlns="http://www.w3.org/2000/svg"
-			>
-
-				<defs>
-
-					<filter
-						id="glow"
-						x="-100%"
-						y="-100%"
-						width="300%"
-						height="300%"
-					>
-
-						<feGaussianBlur
-							stdDeviation="8"
-							result="blur"
-						/>
-
-						<feMerge>
-
-							<feMergeNode
-								in="blur"
-							/>
-
-							<feMergeNode
-								in="SourceGraphic"
-							/>
-
-						</feMerge>
-
-					</filter>
-
-				</defs>
-
-
-				<!-- Prefix -->
-
-				<text
-					x="850"
-					y="790"
-					text-anchor="middle"
-					font-family="Arial, sans-serif"
-					font-size="115"
-					font-weight="900"
-					fill="#00AFFF"
-					stroke="#001827"
-					stroke-width="4"
-					filter="url(#glow)"
-				>${safePrefix}</text>
-
-			</svg>
-			`;
-
-
-			// ========================================
-			// تركيب Prefix فوق الصورة
-			// ========================================
-
-			await sharp(templatePath)
-				.composite([
-					{
-						input: Buffer.from(svg),
-						top: 0,
-						left: 0
-					}
-				])
-				.png()
-				.toFile(outputPath);
-
-
-			// ========================================
-			// إرسال الصورة
-			// ========================================
-
-			return message.reply(
-				{
-					attachment:
-						fs.createReadStream(
-							outputPath
-						)
-				},
-				() => {
-
-					// حذف الصورة المؤقتة
-					setTimeout(
-						() => {
-
-							try {
-
-								if (
-									fs.existsSync(
-										outputPath
-									)
-								) {
-									fs.unlinkSync(
-										outputPath
-									);
-								}
-
-							}
-							catch (e) {}
-
-						},
-						5000
-					);
-
-				}
-			);
-
-		}
-		catch (error) {
-
-			console.error(
-				"[SHTOT PREFIX ERROR]",
-				error
-			);
-
-			return message.reply(
-				"❌ وقع مشكل فصناعة صورة الـ Prefix."
-			);
-		}
+		return message.reply({
+			attachment: await downloadImage()
+		});
 	}
 };
+
+
+// ========================================
+// تحميل صورة Prefix
+// ========================================
+
+function downloadImage() {
+
+	return new Promise((resolve, reject) => {
+
+		const url =
+			"https://i.postimg.cc/WpG4fYbR/file-00000000ee8481f593fe458dfc0ca90c.png";
+
+		https.get(url, response => {
+
+			// إذا كان الرابط دار Redirect
+			if (
+				response.statusCode >= 300 &&
+				response.statusCode < 400 &&
+				response.headers.location
+			) {
+
+				return downloadFromUrl(
+					response.headers.location,
+					resolve,
+					reject
+				);
+			}
+
+			if (response.statusCode !== 200) {
+				return reject(
+					new Error(
+						"Image download failed: " +
+						response.statusCode
+					)
+				);
+			}
+
+			const chunks = [];
+
+			response.on("data", chunk => {
+				chunks.push(chunk);
+			});
+
+			response.on("end", () => {
+				resolve(
+					Buffer.concat(chunks)
+				);
+			});
+
+			response.on("error", reject);
+
+		}).on("error", reject);
+	});
+}
+
+
+function downloadFromUrl(
+	url,
+	resolve,
+	reject
+) {
+
+	https.get(url, response => {
+
+		if (response.statusCode !== 200) {
+			return reject(
+				new Error(
+					"Image redirect failed"
+				)
+			);
+		}
+
+		const chunks = [];
+
+		response.on("data", chunk => {
+			chunks.push(chunk);
+		});
+
+		response.on("end", () => {
+			resolve(
+				Buffer.concat(chunks)
+			);
+		});
+
+		response.on("error", reject);
+
+	}).on("error", reject);
+			}
