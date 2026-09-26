@@ -1,324 +1,163 @@
-const { getPrefix } = global.utils;
-const { commands, aliases } = global.GoatBot;
+"use strict";
+
+const axios = require("axios");
 
 module.exports = {
 	config: {
 		name: "help",
-		version: "1.8",
-		author: "MahMUD",
-		countDown: 5,
-		role: 0,
-		shortDescription: {
-			en: "View command usage and list all commands"
-		},
-		longDescription: {
-			en: "Send a help GIF, then show commands when you reply to it"
-		},
-		category: "info",
-		guide: {
-			en: "{pn} [command name]"
-		},
-		priority: 1
+		aliases: ["menu", "commands"],
+		version: "5.0",
+		author: "NeoKEX",
+		shortDescription: "Show commands",
+		longDescription: "Send help GIF and show commands when replied.",
+		category: "system",
+		guide: "{pn}help [command name]"
 	},
 
-	onStart: async function ({ message, args, event, threadsData, role }) {
-		const { threadID } = event;
-		const threadData = await threadsData.get(threadID);
-		const prefix = getPrefix(threadID);
-		const langCode =
-			threadData.data.lang ||
-			global.GoatBot.config.language ||
-			"en";
-
-		// ==========================================
-		// إذا كتب help بلا اسم أمر → يرسل GIF فقط
-		// ==========================================
-		if (args.length === 0) {
-			try {
-				const gifUrl = "https://yourimageshare.com/ib/ZPrBsRj975";
-
-				const sentMessage = await message.reply({
-					body: "╭────────────⭓\n" +
-						"│ 🦋 SHTOT HELP 🦋\n" +
-						"│\n" +
-						"│ 💫 Reply to this GIF\n" +
-						"│ 📚 to see all commands\n" +
-						"╰────────────⭓",
-					attachment: await global.utils.getStreamFromURL(gifUrl)
-				});
-
-				// نخلي البوت يتسنى الرد على نفس الـGIF
-				global.GoatBot.onReply.set(sentMessage.messageID, {
-					commandName: "help",
-					author: event.senderID,
-					type: "helpList"
-				});
-
-				// نحيد الرسالة من بعد 80 ثانية
-				setTimeout(() => {
-					try {
-						message.unsend(sentMessage.messageID);
-						global.GoatBot.onReply.delete(sentMessage.messageID);
-					} catch (e) {}
-				}, 80000);
-
-			} catch (error) {
-				console.error("Help GIF Error:", error);
-				return message.reply(
-					"❌ وقع مشكل فإرسال صورة الـGIF."
-				);
-			}
-
-			return;
-		}
-
-		// ==========================================
-		// شرح أمر معين: help command
-		// ==========================================
-		const commandName = args[0].toLowerCase();
-
-		const command =
-			commands.get(commandName) ||
-			commands.get(aliases.get(commandName));
-
-		if (!command) {
-			const notFound =
-				langCode === "bn"
-					? `❌ | বেবি, "${commandName}" নামে কোনো কমান্ড নেই!`
-					: langCode === "vi"
-					? `❌ | Không tìm thấy lệnh "${commandName}".`
-					: `❌ | Command "${commandName}" not found.`;
-
-			return message.reply(notFound);
-		}
-
-		const config = command.config;
-		const roleText = roleTextToString(config.role, langCode);
-
-		const labels = {
-			bn: {
-				name: "নাম",
-				alias: "ডাকনাম",
-				info: "তথ্য",
-				desc: "বর্ণনা",
-				author: "লেখক",
-				guide: "নির্দেশনা",
-				usage: "ভার্সন ও পারমিশন",
-				ver: "ভার্সন",
-				role: "অনুমতি",
-				none: "নেই",
-				unknown: "অজানা"
-			},
-			vi: {
-				name: "Tên",
-				alias: "Tên khác",
-				info: "Thông tin",
-				desc: "Mô tả",
-				author: "Tác giả",
-				guide: "Hướng dẫn",
-				usage: "Phiên bản & Quyền",
-				ver: "Phiên bản",
-				role: "Quyền hạn",
-				none: "Không có",
-				unknown: "Không xác định"
-			},
-			en: {
-				name: "NAME",
-				alias: "Aliases",
-				info: "INFO",
-				desc: "Description",
-				author: "Author",
-				guide: "Guide",
-				usage: "Details",
-				ver: "Version",
-				role: "Role",
-				none: "None",
-				unknown: "Unknown"
-			}
-		};
-
-		const lb = labels[langCode] || labels.en;
-
-		const desc =
-			config.description?.[langCode] ||
-			config.description?.en ||
-			config.longDescription?.[langCode] ||
-			config.longDescription?.en ||
-			"No description";
-
-		const guideBody =
-			config.guide?.[langCode] ||
-			config.guide?.en ||
-			"";
-
-		const usage = guideBody
-			.replace(/{pn}/g, prefix + config.name)
-			.replace(/{p}/g, prefix)
-			.replace(/{n}/g, config.name);
-
-		const response =
-			`╭─────────⭓\n` +
-			`│ 🎀 ${lb.name}: ${config.name}\n` +
-			`│ 📃 ${lb.alias}: ${
-				config.aliases
-					? config.aliases.join(", ")
-					: lb.none
-			}\n` +
-			`├──‣ ${lb.info}\n` +
-			`│ 📝 ${lb.desc}: ${desc}\n` +
-			`│ 👑 ${lb.author}: ${
-				config.author || lb.unknown
-			}\n` +
-			`│ 📚 ${lb.guide}: ${
-				usage || prefix + config.name
-			}\n` +
-			`├──‣ ${lb.usage}\n` +
-			`│ ⭐ ${lb.ver}: ${
-				config.version || "1.0"
-			}\n` +
-			`│ ♻️ ${lb.role}: ${roleText}\n` +
-			`╰────────────⭓`;
-
-		const helpMessage = await message.reply(response);
-
-		setTimeout(() => {
-			try {
-				message.unsend(helpMessage.messageID);
-			} catch (e) {}
-		}, 80000);
-	},
-
-	// ==========================================
-	// ملي المستخدم يرد على GIF
-	// ==========================================
-	onReply: async function ({
-		message,
-		event,
-		Reply,
-		threadsData,
-		role
-	}) {
-		if (Reply.type !== "helpList")
-			return;
-
-		const { threadID } = event;
-		const prefix = getPrefix(threadID);
-
-		// نبني لائحة الأوامر
+	onStart: async function ({ message, args, prefix }) {
+		const allCommands = global.GoatBot.commands;
 		const categories = {};
 
-		for (const [name, value] of commands) {
-			if (
-				value.config.role > 0 &&
-				role < value.config.role
-			)
-				continue;
+		const cleanCategoryName = (text) => {
+			if (!text) return "others";
 
-			const category =
-				value.config.category ||
-				"Uncategorized";
+			return text
+				.normalize("NFKD")
+				.replace(/[^\w\s-]/g, "")
+				.replace(/\s+/g, " ")
+				.trim()
+				.toLowerCase();
+		};
 
-			if (!categories[category]) {
-				categories[category] = {
-					commands: []
-				};
-			}
+		for (const [name, cmd] of allCommands) {
+			const cat = cleanCategoryName(cmd.config.category);
 
-			if (
-				!categories[category].commands.includes(
-					name
-				)
-			) {
-				categories[category].commands.push(name);
-			}
+			if (!categories[cat])
+				categories[cat] = [];
+
+			categories[cat].push(cmd.config.name);
 		}
 
-		let msg = "";
+		// معلومات أمر معين
+		if (args[0]) {
+			const query = args[0].toLowerCase();
 
-		Object.keys(categories)
-			.sort()
-			.forEach(category => {
-				msg +=
-					`\n╭─────⭓ ${category.toUpperCase()}`;
+			const cmd =
+				allCommands.get(query) ||
+				[...allCommands.values()].find((c) =>
+					(c.config.aliases || []).includes(query)
+				);
 
-				const names =
-					categories[category].commands.sort();
+			if (!cmd)
+				return message.reply(
+					`❌ Command "${query}" not found.`
+				);
 
-				for (
-					let i = 0;
-					i < names.length;
-					i += 3
-				) {
-					const cmds = names
-						.slice(i, i + 3)
-						.map(item => `✧${item}`);
+			const {
+				name,
+				version,
+				author,
+				guide,
+				category,
+				shortDescription,
+				longDescription,
+				aliases
+			} = cmd.config;
 
-					msg += `\n│ ${cmds.join("  ")}`;
-				}
+			const desc =
+				typeof longDescription === "string"
+					? longDescription
+					: longDescription?.en ||
+					  shortDescription?.en ||
+					  shortDescription ||
+					  "No description";
 
-				msg += `\n╰────────────⭓\n`;
-			});
+			const usage =
+				typeof guide === "string"
+					? guide.replace(/{pn}/g, prefix)
+					: guide?.en?.replace(/{pn}/g, prefix) ||
+					  `${prefix}${name}`;
 
-		const totalCommands = commands.size;
+			const requiredRole =
+				cmd.config.role !== undefined
+					? cmd.config.role
+					: 0;
+
+			return message.reply(
+				`☠️ 𝗖𝗢𝗠𝗠𝗔𝗡𝗗 𝗜𝗡𝗙𝗢 ☠️\n\n` +
+				`➥ Name: ${name}\n` +
+				`➥ Category: ${category || "Uncategorized"}\n` +
+				`➥ Description: ${desc}\n` +
+				`➥ Aliases: ${aliases?.length ? aliases.join(", ") : "None"}\n` +
+				`➥ Usage: ${usage}\n` +
+				`➥ Permission: ${requiredRole}\n` +
+				`➥ Author: ${author}\n` +
+				`➥ Version: ${version}`
+			);
+		}
+
+		// إنشاء قائمة الأوامر
+		const formatCommands = (cmds) =>
+			cmds.sort().map((cmd) => `× ${cmd}`);
+
+		let msg =
+			`━━━☠️ 𝗡𝗲𝗼𝗞𝗘𝗫 𝗔𝗜 ☠️━━━\n`;
+
+		for (const cat of Object.keys(categories).sort()) {
+			msg += `\n╭──『 ${cat.toUpperCase()} 』\n`;
+			msg += `${formatCommands(categories[cat]).join(" ")}\n`;
+			msg += `╰────────────◊\n`;
+		}
 
 		msg +=
-			`\n╭────────────⭓\n` +
-			`│ 🦋 SHTOT COMMANDS 🦋\n` +
-			`│\n` +
-			`│ ⭔ Total Commands: ${totalCommands}\n` +
-			`│\n` +
-			`│ 📚 ${prefix}help <command>\n` +
-			`│ لمعرفة تفاصيل أي أمر\n` +
-			`╰────────────⭓`;
+			`\n➥ Use: ${prefix}help [command name] for details\n` +
+			`➥ Use: ${prefix}callad to talk with bot admins '_'`;
+
+		// الرابط المباشر للـ GIF
+		const gifUrl =
+			"https://i.yourimageshare.com/ZPrBsRj975.gif";
 
 		try {
-			const sent = await message.reply(msg);
+			// تحميل الـ GIF مباشرة
+			const response = await axios({
+				method: "GET",
+				url: gifUrl,
+				responseType: "stream"
+			});
 
-			setTimeout(() => {
-				try {
-					message.unsend(sent.messageID);
-				} catch (e) {}
-			}, 80000);
+			// إرسال الـ GIF
+			const sentMessage = await message.reply({
+				body: "🎬 𝗡𝗲𝗼𝗞𝗘𝗫 𝗔𝗜\n\n↳ 𝗥𝗲𝗽𝗹𝘆 𝘁𝗼 𝘁𝗵𝗶𝘀 𝗚𝗜𝗙 𝗳𝗼𝗿 𝗺𝗲𝗻𝘂 📋",
+				attachment: response.data
+			});
+
+			// تخزين الرد
+			global.GoatBot.onReply.set(sentMessage.messageID, {
+				commandName: "help",
+				messageID: sentMessage.messageID,
+				author: message.senderID,
+				body: msg
+			});
 
 		} catch (error) {
-			console.error("Help List Error:", error);
+			console.error("HELP GIF ERROR:", error);
+
+			return message.reply(
+				"❌ وقع مشكل وأنا كنرسل الـGIF."
+			);
 		}
+	},
+
+	onReply: async function ({ message, event, Reply }) {
+
+		// غير صاحب help يقدر يفتح القائمة
+		if (
+			Reply.author &&
+			event.senderID !== Reply.author
+		) {
+			return;
+		}
+
+		return message.reply(Reply.body);
 	}
 };
-
-function roleTextToString(role, lang) {
-	const roles = {
-		bn: [
-			"সব ইউজার",
-			"গ্রুপ অ্যাডমিন",
-			"বোট অ্যাডমিন",
-			"ডেভেলপার (Dev)",
-			"ভিআইপি (VIP)",
-			"NSFW ইউজার"
-		],
-		en: [
-			"All users",
-			"Group Admin",
-			"Bot Admin",
-			"Developer",
-			"VIP User",
-			"NSFW User"
-		],
-		vi: [
-			"Tất cả người dùng",
-			"Quản trị viên nhóm",
-			"Admin bot",
-			"Người phát triển",
-			"Người dùng VIP",
-			"Người dùng NSFW"
-		]
-	};
-
-	const r = roles[lang] || roles.en;
-
-	if (role >= 0 && role <= 5) {
-		return `${role} (${r[role]})`;
-	}
-
-	return `${role} (Unknown)`;
-                }
